@@ -1,0 +1,42 @@
+# ============================================================================
+# GITIGNORE - RANSOMWARE SCANNER
+# ============================================================================
+
+# Diretórios gerados
+quarantine/
+logs/
+reports/
+__pycache__/
+.pytest_cache/
+.idea/
+.vscode/
+
+# Arquivos de sistema
+.DS_Store
+.env
+.env.local
+*.swp
+*.swo
+*~
+
+# Python
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.Python
+venv/
+env/
+ENV/
+
+# Relatórios gerados
+*.json
+*.pdf
+*.png
+*.jpg
+*.csv
+
+# Backups
+*.bak
+*.backup
+*.tmp

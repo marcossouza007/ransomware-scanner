@@ -1,0 +1,22 @@
+# ============================================================================
+# DEPENDÊNCIAS - RANSOMWARE SCANNER v2.0
+# ============================================================================
+
+# Análise de dados
+pandas>=1.3.0
+numpy>=1.21.0
+
+# Gráficos e visualização
+matplotlib>=3.4.0
+seaborn>=0.11.0
+Pillow>=8.3.0
+
+# Relatórios PDF
+reportlab>=3.6.0
+
+# Criptografia
+pycryptodome>=3.14.0
+
+# Utilitários
+click>=8.0.0
+colorama>=0.4.4
