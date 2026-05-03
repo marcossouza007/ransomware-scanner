@@ -9,7 +9,7 @@ from datetime import datetime
 import config
 import utils
 from scanner import RansomwareScanner
-from quarantine import QuarantineManager, SecureEraser, ThreatHandler
+from quarantine import QuarantineManager, SecureDeleter
 from decryptor import RansomwareDecryptor
 from pdf_report import PDFReportGenerator
 
@@ -188,7 +188,7 @@ class RansomwareScannerCLI:
                     print(f"\n🗑️  {len(files)} arquivo(s) para deletar com segurança")
                     confirm = input("Confirmar? (s/n): ").lower()
                     if confirm == 's':
-                        eraser = SecureEraser(config.DEFAULT_OVERWRITE_METHOD)
+                        eraser = SecureDeleter(config.DEFAULT_OVERWRITE_METHOD)
                         for f in files:
                             eraser.secure_delete(f['quarantine_path'])
                         print("✅ Deletados com segurança")
