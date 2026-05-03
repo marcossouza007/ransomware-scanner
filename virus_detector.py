@@ -5,7 +5,7 @@
 import json
 import os
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import utils
 from config import BASE_DIR
