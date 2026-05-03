@@ -9,7 +9,7 @@ from datetime import datetime
 import config
 import utils
 from scanner import RansomwareScanner
-from quarantine import QuarantineManager, SecureEraser, ThreatHandler
+from quarantine import QuarantineManager, SecureDeleter
 from decryptor import RansomwareDecryptor
 from pdf_report import PDFReportGenerator
 
@@ -23,7 +23,6 @@ class RansomwareScannerCLI:
     """Interface CLI para o Ransomware Scanner"""
 
     def __init__(self):
-        config.init_directories()
         self.scanner = RansomwareScanner(
             threat_db=config.THREAT_DATABASE,
             threat_threshold=config.SCAN_CONFIG['threat_threshold']
@@ -111,16 +110,16 @@ class RansomwareScannerCLI:
         
         print("\n🔐 TENTAR RECUPERAÇÃO\n")
         print("Ransomware types disponíveis:")
-        for idx, key in enumerate(config.RANSOMWARE_KEYS.keys(), 1):
+        for idx, key in enumerate(config.KNOWN_RANSOMWARE_KEYS.keys(), 1):
             print(f"{idx}. {key.upper()}")
         
         choice = input("\nEscolha o tipo (número ou 0 para tentar todos): ").strip()
         
         types_to_try = []
         if choice == '0':
-            types_to_try = list(config.RANSOMWARE_KEYS.keys())
-        elif choice.isdigit() and 0 < int(choice) <= len(config.RANSOMWARE_KEYS):
-            types_to_try = [list(config.RANSOMWARE_KEYS.keys())[int(choice)-1]]
+            types_to_try = list(config.KNOWN_RANSOMWARE_KEYS.keys())
+        elif choice.isdigit() and 0 < int(choice) <= len(config.KNOWN_RANSOMWARE_KEYS):
+            types_to_try = [list(config.KNOWN_RANSOMWARE_KEYS.keys())[int(choice)-1]]
         else:
             print("❌ Opção inválida")
             return
@@ -150,7 +149,7 @@ class RansomwareScannerCLI:
             choice = input("\nEscolha uma opção: ").strip()
             
             if choice == '1':
-                files = self.quarantine.list_quarantined_files()
+                files = self.quarantine.list_quarantined()
                 if not files:
                     print("\n❌ Nenhum arquivo em quarentena")
                 else:
@@ -183,12 +182,12 @@ class RansomwareScannerCLI:
                 input("\nPressione ENTER para continuar...")
             
             elif choice == '4':
-                files = self.quarantine.list_quarantined_files()
+                files = self.quarantine.list_quarantined()
                 if files:
                     print(f"\n🗑️  {len(files)} arquivo(s) para deletar com segurança")
                     confirm = input("Confirmar? (s/n): ").lower()
                     if confirm == 's':
-                        eraser = SecureEraser(config.DEFAULT_OVERWRITE_METHOD)
+                        eraser = SecureDeleter(config.DEFAULT_OVERWRITE_METHOD)
                         for f in files:
                             eraser.secure_delete(f['quarantine_path'])
                         print("✅ Deletados com segurança")
@@ -208,7 +207,7 @@ class RansomwareScannerCLI:
         
         self.pdf_gen.generate_scan_report(self.threats, 'scan_report.pdf')
         
-        quarantine_files = self.quarantine.list_quarantined_files()
+        quarantine_files = self.quarantine.list_quarantined()
         if quarantine_files:
             self.quarantine.generate_quarantine_report('quarantine_report.json')
         
@@ -247,8 +246,8 @@ class RansomwareScannerCLI:
         print("\n⚙️  CONFIGURAÇÕES\n")
         print(f"Threshold de Risco: {config.SCAN_CONFIG['threat_threshold']}")
         print(f"Método de Sobrescrita: {config.DEFAULT_OVERWRITE_METHOD.value}")
-        print(f"Diretório de Quarentena: {config.QUARANTINE_CONFIG['quarantine_dir']}")
-        print(f"Log Level: {config.LOG_CONFIG['log_level']}")
+        print(f"Diretório de Quarentena: {config.QUARANTINE_DIR}")
+        print(f"Log Level: {config.LOGGING_CONFIG['log_level']}")
         print(f"\nExtensões Suspeitas: {len(config.SUSPICIOUS_EXTENSIONS)}")
         print(f"Palavras-chave de Ameaça: {len(config.THREAT_DATABASE)}")
         
