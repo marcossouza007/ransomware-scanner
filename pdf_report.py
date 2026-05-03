@@ -268,7 +268,10 @@ class PDFReportGenerator:
         headers = ['Arquivo', 'Risco', 'Tipo', 'Extensão', 'Tamanho']
         data = [headers]
 
-        for threat in threats[:50]:  # Limite de 50 linhas
+        # Limit to 50 rows and keep a parallel list of scores for styling
+        _MAX_ROWS = 50
+        row_scores: List[float] = []
+        for threat in threats[:_MAX_ROWS]:
             filename = Path(threat.get('path', 'N/A')).name
             risk = f"{threat.get('risk_score', 0):.1%}"
             threat_type = threat.get('threat_type', 'unknown')
@@ -276,6 +279,7 @@ class PDFReportGenerator:
             size_bytes = threat.get('size', 0)
             size_str = _fmt_bytes(size_bytes)
             data.append([filename, risk, threat_type, extension, size_str])
+            row_scores.append(threat.get('risk_score', 0))
 
         col_widths = [200, 55, 80, 70, 65]
         table = Table(data, colWidths=col_widths)
@@ -296,8 +300,9 @@ class PDFReportGenerator:
             ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
         ]
 
-        for row_idx, threat in enumerate(threats[:50], start=1):
-            score = threat.get('risk_score', 0)
+        # Apply risk-level colour to the 'Risco' column using row_scores,
+        # which was built from the same slice as `data` rows 1..n.
+        for row_idx, score in enumerate(row_scores, start=1):
             if score >= 0.75:
                 cat = 'critical'
             elif score >= 0.45:
