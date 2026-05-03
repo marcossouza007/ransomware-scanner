@@ -166,7 +166,8 @@ def _parse_nvd_response(data: Dict, severity_filter: Optional[str]) -> Dict:
 
         # Aplicar filtro de severidade
         if severity_filter:
-            filter_idx = SEVERITY_ORDER.index(severity_filter.upper()) if severity_filter.upper() in SEVERITY_ORDER else len(SEVERITY_ORDER)
+            filter_upper = severity_filter.upper()
+            filter_idx = SEVERITY_ORDER.index(filter_upper) if filter_upper in SEVERITY_ORDER else len(SEVERITY_ORDER)
             cve_idx = SEVERITY_ORDER.index(severity) if severity in SEVERITY_ORDER else len(SEVERITY_ORDER)
             if cve_idx > filter_idx:
                 continue

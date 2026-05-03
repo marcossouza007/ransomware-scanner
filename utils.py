@@ -292,7 +292,7 @@ def format_size(bytes_size: int) -> str:
     return format_bytes(bytes_size)
 
 
-def generate_report_summary(threats: list) -> dict:
+def generate_report_summary(threats: list) -> Dict:
     """
     Gera resumo estatístico a partir de lista de ameaças.
 
@@ -303,7 +303,7 @@ def generate_report_summary(threats: list) -> dict:
         Dicionário com contagens por risco, tipo, tamanho total e risco médio.
     """
     by_risk = {'critical': 0, 'high': 0, 'medium': 0, 'low': 0}
-    by_type: dict = {}
+    by_type: Dict[str, int] = {}
     total_size = 0
     total_risk = 0.0
 

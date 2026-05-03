@@ -230,7 +230,7 @@ class RansomwareScanner:
 
                         # Incorporar score de detecção de vírus, se ativado
                         virus_probability = 0.0
-                        virus_names: list = []
+                        virus_names: List[str] = []
                         if virus_detector:
                             try:
                                 virus_probability = virus_detector.detect_virus_probability(

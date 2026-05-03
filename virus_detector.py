@@ -233,7 +233,9 @@ class VirusDetector:
 # INSTÂNCIA GLOBAL (singleton leve)
 # ============================================================================
 
-_detector_instance: VirusDetector = None
+from typing import Optional
+
+_detector_instance: Optional[VirusDetector] = None
 
 
 def get_detector() -> VirusDetector:

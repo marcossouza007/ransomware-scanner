@@ -292,8 +292,8 @@ def _apply_filters(entry: Dict, filters: Dict) -> bool:
     # Filtro de extensão
     extensions = filters.get('extensions')
     if extensions:
-        clean = [e if e.startswith('.') else f'.{e}' for e in extensions]
-        if entry['extension'] not in clean:
+        clean_extensions = [e if e.startswith('.') else f'.{e}' for e in extensions]
+        if entry['extension'] not in clean_extensions:
             return False
 
     # Filtro de data

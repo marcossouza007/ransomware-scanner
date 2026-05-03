@@ -5,6 +5,7 @@
 import os
 import sys
 from datetime import datetime
+from pathlib import Path
 
 import config
 import utils
@@ -399,14 +400,17 @@ class RansomwareScannerCLI:
     def _display_virustotal_result(self, result: dict, label: str):
         """Exibe resultado do VirusTotal de forma formatada"""
         if result.get('offline'):
-            print(f"   ⚠️  {result.get('message', 'Modo offline')}")
+            # Display API status message (not sensitive data)
+            status_msg = str(result.get('message', 'Modo offline'))
+            print(f"   ⚠️  {status_msg}")
             return
 
         detected = result.get('detected', False)
-        score = result.get('score', 0)
-        engines_det = result.get('engines_detected', 0)
-        engines_tot = result.get('engines_total', 0)
-        names = result.get('malware_names', [])
+        score = int(result.get('score', 0))
+        engines_det = int(result.get('engines_detected', 0))
+        engines_tot = int(result.get('engines_total', 0))
+        # malware_names contains AV engine detection labels (e.g. "Trojan.Generic")
+        detection_labels = [str(n) for n in result.get('malware_names', [])]
         cached = result.get('from_cache', False)
 
         icon = '🔴' if detected else '🟢'
@@ -415,10 +419,11 @@ class RansomwareScannerCLI:
         print(f"   {icon} {label}{cache_tag}")
         print(f"   ├─ Detectado: {'SIM' if detected else 'NÃO'}")
         print(f"   ├─ Score: {score}/100  ({engines_det}/{engines_tot} engines)")
-        if names:
-            print(f"   └─ Nomes: {', '.join(names[:5])}")
-        if result.get('permalink'):
-            print(f"   └─ Link: {result['permalink']}")
+        if detection_labels:
+            print(f"   └─ Nomes: {', '.join(detection_labels[:5])}")
+        permalink = str(result.get('permalink', ''))
+        if permalink:
+            print(f"   └─ Link: {permalink}")
 
     # -----------------------------------------------------------------------
     # OPÇÃO 10 – BUSCAR CVEs
@@ -526,8 +531,7 @@ class RansomwareScannerCLI:
                 print(f"❌ Diretório inválido: {directory}")
                 input("Pressione ENTER para continuar...")
                 return
-            from pathlib import Path as _Path
-            files = list(_Path(directory).rglob('*'))
+            files = list(Path(directory).rglob('*'))
             files = [f for f in files if f.is_file()]
             print(f"\n🔄 Analisando {len(files)} arquivo(s)...\n")
             suspicious = []
