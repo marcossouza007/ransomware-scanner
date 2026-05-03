@@ -20,3 +20,6 @@ pycryptodome>=3.14.0
 # Utilitários
 click>=8.0.0
 colorama>=0.4.4
+
+# Requisições HTTP (VirusTotal, NVD/CVE)
+requests>=2.28.0

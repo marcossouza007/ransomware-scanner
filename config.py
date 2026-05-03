@@ -185,6 +185,42 @@ RISK_SCORE_WEIGHTS = {
 assert sum(RISK_SCORE_WEIGHTS.values()) == 1.0, "Risk score weights must sum to 1.0"
 
 # ============================================================================
+# VIRUSTOTAL API
+# ============================================================================
+
+VIRUSTOTAL_CONFIG = {
+    # Insira sua chave de API VirusTotal (https://www.virustotal.com/gui/my-apikey)
+    'api_key': os.environ.get('VIRUSTOTAL_API_KEY', ''),
+    'base_url': 'https://www.virustotal.com/api/v3',
+    'cache_ttl_days': 7,
+    'rate_limit_per_minute': 4,    # Limite para conta gratuita
+}
+
+# ============================================================================
+# CVE DATABASE (NVD)
+# ============================================================================
+
+CVE_CONFIG = {
+    'nvd_url': 'https://services.nvd.nist.gov/rest/json/cves/2.0',
+    'cache_ttl_hours': 24,
+    'max_results': 20,
+}
+
+# ============================================================================
+# BUSCA AVANÇADA DE ARQUIVOS
+# ============================================================================
+
+ADVANCED_SEARCH_CONFIG = {
+    'exclude_dirs': [
+        '.git', '.svn', '.hg',
+        'node_modules', '__pycache__', '.tox', '.venv', 'venv', 'env',
+        '.idea', '.vscode',
+        'quarantine',
+    ],
+    'max_workers': 4,
+}
+
+# ============================================================================
 # VALIDAÇÕES
 # ============================================================================
 

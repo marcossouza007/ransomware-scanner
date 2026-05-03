@@ -36,6 +36,10 @@ ENV/
 *.jpg
 *.csv
 
+# Exceções: arquivos de dados estáticos do projeto
+!data/virus_signatures.json
+!data/cve_cache.json
+
 # Backups
 *.bak
 *.backup

@@ -1,0 +1,36 @@
+{
+  "version": "1.0",
+  "description": "Base de assinaturas de vírus/malware conhecidos",
+  "last_updated": "2026-05-03",
+  "hashes": {
+    "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855": "Empty_File_Placeholder",
+    "84c82835a5d21bbcf75a61706d8ab549": "Eicar_Test_Signature",
+    "275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f": "EICAR_Test_File"
+  },
+  "patterns": [
+    {
+      "name": "Eicar_Test",
+      "description": "Arquivo de teste EICAR (não é vírus real)",
+      "pattern": "X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*",
+      "type": "string"
+    },
+    {
+      "name": "WannaCry_Marker",
+      "description": "Marcador de extensão WannaCry",
+      "pattern": "\\.WNCRY",
+      "type": "regex"
+    },
+    {
+      "name": "Ransom_Note_Generic",
+      "description": "Nota de resgate genérica",
+      "pattern": "YOUR FILES HAVE BEEN ENCRYPTED",
+      "type": "string"
+    }
+  ],
+  "behavioral": [
+    "mass_file_modification",
+    "shadow_copy_deletion",
+    "registry_persistence",
+    "network_beaconing"
+  ]
+}
