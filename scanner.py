@@ -248,6 +248,82 @@ class RansomwareScanner:
             print(f"❌ Erro durante scan: {e}")
             return []
     
+    def scan_with_advanced_search(
+        self,
+        criteria: Dict,
+        start_path: str,
+        recursive: bool = True,
+    ) -> List[Dict]:
+        """
+        Executa scan de ransomware em arquivos filtrados por critérios de busca.
+
+        Combina o sistema de busca avançada (AdvancedFileSearch) com a análise
+        de risco do scanner para encontrar ameaças dentro de um conjunto
+        filtrado de arquivos.
+
+        Args:
+            criteria: Dicionário de critérios de busca (veja AdvancedFileSearch.advanced_search).
+            start_path: Caminho inicial de busca.
+            recursive: Se True, percorre subdiretórios.
+
+        Returns:
+            Lista de dicts de ameaças detectadas (mesmo formato de scan_directory).
+
+        Example::
+
+            criteria = {'extensions': ['.exe', '.dll'], 'min_size': 1024}
+            threats = scanner.scan_with_advanced_search(criteria, '/home/user')
+        """
+        from file_search import AdvancedFileSearch
+
+        self.start_time = datetime.now()
+        self.infected_files = []
+
+        print(f"\n🎯 Scan Customizado em: {start_path}")
+        print(f"   Critérios: {criteria}")
+        print("=" * 80)
+
+        searcher = AdvancedFileSearch()
+        matched_files = searcher.advanced_search(criteria, start_path, recursive)
+
+        if not matched_files:
+            print("ℹ️  Nenhum arquivo correspondente aos critérios encontrado.")
+            self.end_time = datetime.now()
+            return []
+
+        print(f"   {len(matched_files)} arquivo(s) correspondentes. Analisando riscos...\n")
+
+        for file_info in matched_files:
+            file_path = file_info['path']
+            try:
+                risk_score = self.calculate_risk(file_path)
+                if risk_score > self.threat_threshold:
+                    threat_info = {
+                        'path': file_path,
+                        'risk_score': risk_score,
+                        'size': file_info.get('size_bytes', 0),
+                        'timestamp': datetime.now().isoformat(),
+                        'file_hash': calculate_sha256(file_path),
+                        'threat_type': classify_threat_type(file_path, 0),
+                        'extension': get_file_extension(file_path),
+                    }
+                    self.infected_files.append(threat_info)
+                    print(f"⚠️  [ENCONTRADO] {file_path}")
+                    print(f"   └─ Risk Score: {risk_score:.2%}")
+            except Exception as exc:
+                logger.debug(f"Erro ao processar {file_path}: {exc}")
+
+        self.end_time = datetime.now()
+        duration = (self.end_time - self.start_time).total_seconds()
+
+        print(f"\n✓ Scan customizado concluído: {len(matched_files)} arquivo(s) em {duration:.1f}s")
+        print(f"🚨 Ameaças encontradas: {len(self.infected_files)}")
+        logger.info(
+            f"scan_with_advanced_search: {len(matched_files)} files, "
+            f"{len(self.infected_files)} threats in {duration:.1f}s"
+        )
+        return self.infected_files
+
     def generate_report(self, output_file: str = 'ransomware_scan_report.json'):
         """Gera relatório de scan em JSON"""
         from utils import save_json_report
