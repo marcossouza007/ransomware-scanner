@@ -188,9 +188,9 @@ class RansomwareScannerCLI:
                     print(f"\n🗑️  {len(files)} arquivo(s) para deletar com segurança")
                     confirm = input("Confirmar? (s/n): ").lower()
                     if confirm == 's':
-                        eraser = SecureDeleter(config.DEFAULT_OVERWRITE_METHOD)
+                        deleter = SecureDeleter(config.DEFAULT_OVERWRITE_METHOD)
                         for f in files:
-                            eraser.secure_delete(f['quarantine_path'])
+                            deleter.secure_delete(f['quarantine_path'])
                         print("✅ Deletados com segurança")
                 input("\nPressione ENTER para continuar...")
             
