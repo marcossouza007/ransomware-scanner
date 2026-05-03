@@ -12,6 +12,7 @@ from scanner import RansomwareScanner
 from quarantine import QuarantineManager, SecureDeleter
 from decryptor import RansomwareDecryptor
 from pdf_report import PDFReportGenerator
+from file_search import AdvancedFileSearch, print_results_table
 
 logger = utils.setup_logger('main')
 
@@ -52,6 +53,11 @@ class RansomwareScannerCLI:
         print("6. 📊 Ver Estatísticas")
         print("7. ⚙️  Configurações")
         print("8. ✖️  Sair")
+        print("─"*40)
+        print("9. 🔎 Busca Avançada de Arquivos")
+        print("10. 📁 Listar Diretórios e Estrutura")
+        print("11. 📦 Listar e Escanear Pacotes")
+        print("12. 🎯 Scan Customizado")
         print("\n" + "-"*80)
 
     def scan_directory(self):
@@ -254,6 +260,245 @@ class RansomwareScannerCLI:
         
         input("\nPressione ENTER para continuar...")
 
+    def advanced_file_search(self):
+        """Opção 9: Busca Avançada de Arquivos"""
+        print("\n🔎 BUSCA AVANÇADA DE ARQUIVOS\n")
+        print("Tipo de busca:")
+        print("1. Por padrão/extensão")
+        print("2. Por tamanho")
+        print("3. Por data de modificação")
+        print("4. Por nome de arquivo")
+
+        choice = input("\nEscolha (1-4): ").strip()
+
+        directory = input("Diretório de busca (padrão: ./): ").strip() or "./"
+        directory = utils.normalize_path(directory)
+        if not utils.is_valid_directory(directory):
+            print(f"❌ Diretório inválido: {directory}")
+            input("Pressione ENTER para continuar...")
+            return
+
+        recursive = input("Recursivo? (s/n, padrão: s): ").lower() != 'n'
+        searcher = AdvancedFileSearch()
+
+        if choice == '1':
+            raw = input("Extensão(ões) separadas por vírgula (ex: .exe,.dll) ou padrão glob (ex: malware*): ").strip()
+            if ',' in raw or not raw.startswith('.'):
+                # Múltiplas extensões ou padrão glob
+                if ',' in raw:
+                    exts = [e.strip() for e in raw.split(',')]
+                    results = searcher.search_by_extension(exts, directory, recursive)
+                else:
+                    results = searcher.search_by_pattern(raw, directory, recursive)
+            else:
+                results = searcher.search_by_extension([raw], directory, recursive)
+            print_results_table(results, "Resultados por Padrão/Extensão")
+
+        elif choice == '2':
+            min_mb = input("Tamanho mínimo em MB (deixe em branco para sem limite): ").strip()
+            max_mb = input("Tamanho máximo em MB (deixe em branco para sem limite): ").strip()
+            min_bytes = int(float(min_mb) * 1024 * 1024) if min_mb else None
+            max_bytes = int(float(max_mb) * 1024 * 1024) if max_mb else None
+            results = searcher.search_by_size(min_bytes, max_bytes, directory, recursive)
+            print_results_table(results, "Resultados por Tamanho")
+
+        elif choice == '3':
+            start_date = input("Data inicial (YYYY-MM-DD, deixe em branco para sem limite): ").strip() or None
+            end_date = input("Data final (YYYY-MM-DD, deixe em branco para sem limite): ").strip() or None
+            results = searcher.search_by_date(start_date, end_date, directory, recursive)
+            print_results_table(results, "Resultados por Data")
+
+        elif choice == '4':
+            pattern = input("Padrão de nome de arquivo (ex: config*, *.bak): ").strip()
+            results = searcher.search_by_filename(pattern, directory, recursive)
+            print_results_table(results, "Resultados por Nome")
+
+        else:
+            print("❌ Opção inválida")
+            input("Pressione ENTER para continuar...")
+            return
+
+        input("\nPressione ENTER para continuar...")
+
+    def list_directories_menu(self):
+        """Opção 10: Listar Diretórios e Estrutura"""
+        print("\n📁 LISTAR DIRETÓRIOS E ESTRUTURA\n")
+        directory = input("Diretório inicial (padrão: ./): ").strip() or "./"
+        directory = utils.normalize_path(directory)
+        if not utils.is_valid_directory(directory):
+            print(f"❌ Diretório inválido: {directory}")
+            input("Pressione ENTER para continuar...")
+            return
+
+        depth_str = input("Profundidade máxima (deixe em branco para ilimitado): ").strip()
+        max_depth = int(depth_str) if depth_str.isdigit() else None
+
+        print("\nVisualização:")
+        print("1. 🌳 Árvore de diretórios")
+        print("2. 📋 Tabela com estatísticas")
+        view_choice = input("Escolha (1-2, padrão: 1): ").strip() or '1'
+
+        searcher = AdvancedFileSearch(max_depth=max_depth)
+
+        if view_choice == '1':
+            searcher.print_directory_tree(directory, max_depth=max_depth)
+        else:
+            dirs = searcher.list_directories(directory, recursive=True, max_depth=max_depth)
+            if not dirs:
+                print("\n⚠️  Nenhum subdiretório encontrado.")
+            else:
+                print(f"\n{'='*80}")
+                print(f"  Diretórios em '{directory}'  ({len(dirs)} encontrados)")
+                print(f"{'='*80}")
+                print(f"{'#':<4} {'Nome':<30} {'Arquivos':>8}  {'Tamanho':>10}  Profundidade")
+                print(f"{'-'*4} {'-'*30} {'-'*8}  {'-'*10}  {'-'*12}")
+                for idx, d in enumerate(dirs, 1):
+                    name = d['name'][:28]
+                    print(
+                        f"{idx:<4} {name:<30} {d['file_count']:>8}  "
+                        f"{d['total_size']:>10}  {d['depth']}"
+                    )
+                print(f"{'='*80}")
+
+        input("\nPressione ENTER para continuar...")
+
+    def list_packages_menu(self):
+        """Opção 11: Listar e Escanear Pacotes"""
+        print("\n📦 LISTAR E ESCANEAR PACOTES\n")
+        print("1. 📋 Listar pacotes compactados")
+        print("2. 🔍 Buscar padrão dentro de pacotes")
+        print("3. 🛡️  Escanear arquivos dentro de pacotes")
+
+        choice = input("\nEscolha (1-3): ").strip()
+        directory = input("Diretório de busca (padrão: ./): ").strip() or "./"
+        directory = utils.normalize_path(directory)
+        if not utils.is_valid_directory(directory):
+            print(f"❌ Diretório inválido: {directory}")
+            input("Pressione ENTER para continuar...")
+            return
+
+        recursive = input("Recursivo? (s/n, padrão: s): ").lower() != 'n'
+        searcher = AdvancedFileSearch()
+
+        if choice == '1':
+            packages = searcher.list_packages(directory, recursive)
+            if not packages:
+                print("\n⚠️  Nenhum pacote encontrado.")
+            else:
+                print(f"\n{'='*80}")
+                print(f"  Pacotes encontrados: {len(packages)}")
+                print(f"{'='*80}")
+                for idx, pkg in enumerate(packages, 1):
+                    n_entries = len(pkg.get('contents', []))
+                    print(
+                        f"{idx}. [{pkg.get('package_type','?').upper()}] {pkg['name']}  "
+                        f"({pkg['size']}, {n_entries} entradas)"
+                    )
+                    print(f"   └─ {pkg['path']}")
+                print(f"{'='*80}")
+
+        elif choice == '2':
+            pattern = input("Padrão de busca (ex: *.exe, malware*): ").strip()
+            results = searcher.search_in_packages(pattern, directory, recursive)
+            if not results:
+                print("\n⚠️  Nenhuma entrada encontrada nos pacotes.")
+            else:
+                print(f"\n{'='*80}")
+                print(f"  Entradas correspondentes: {len(results)}")
+                print(f"{'='*80}")
+                for idx, r in enumerate(results, 1):
+                    print(
+                        f"{idx}. {r['entry_name']}  ({r['entry_size']})"
+                    )
+                    print(f"   └─ Pacote: {r['package_path']}")
+                print(f"{'='*80}")
+
+        elif choice == '3':
+            print("\n🛡️  Escaneando pacotes (análise de nomes e metadados)...")
+            packages = searcher.list_packages(directory, recursive)
+            threats_found = 0
+            from scanner import check_extension
+            for pkg in packages:
+                for entry_name, _entry_size in pkg.get('contents', []):
+                    if check_extension(entry_name):
+                        print(
+                            f"⚠️  Extensão suspeita em pacote: '{entry_name}' "
+                            f"dentro de {pkg['name']}"
+                        )
+                        threats_found += 1
+            print(f"\n✓ {len(packages)} pacote(s) analisados, {threats_found} entrada(s) suspeita(s)")
+
+        else:
+            print("❌ Opção inválida")
+
+        input("\nPressione ENTER para continuar...")
+
+    def custom_scan(self):
+        """Opção 12: Scan Customizado com múltiplos critérios"""
+        print("\n🎯 SCAN CUSTOMIZADO\n")
+        print("Configure os critérios de busca (deixe em branco para ignorar o critério):\n")
+
+        directory = input("Diretório de busca (padrão: ./): ").strip() or "./"
+        directory = utils.normalize_path(directory)
+        if not utils.is_valid_directory(directory):
+            print(f"❌ Diretório inválido: {directory}")
+            input("Pressione ENTER para continuar...")
+            return
+
+        recursive = input("Recursivo? (s/n, padrão: s): ").lower() != 'n'
+
+        # Coletar critérios
+        criteria = {}
+
+        raw_exts = input("Extensões (ex: .exe,.dll — ou deixe em branco): ").strip()
+        if raw_exts:
+            criteria['extensions'] = [e.strip() for e in raw_exts.split(',')]
+
+        raw_pattern = input("Padrão glob/regex (ex: malware*, /^ransom.*/): ").strip()
+        if raw_pattern:
+            criteria['pattern'] = raw_pattern
+
+        min_mb = input("Tamanho mínimo em MB (ou deixe em branco): ").strip()
+        if min_mb:
+            try:
+                criteria['min_size'] = int(float(min_mb) * 1024 * 1024)
+            except ValueError:
+                pass
+
+        max_mb = input("Tamanho máximo em MB (ou deixe em branco): ").strip()
+        if max_mb:
+            try:
+                criteria['max_size'] = int(float(max_mb) * 1024 * 1024)
+            except ValueError:
+                pass
+
+        start_date = input("Data inicial YYYY-MM-DD (ou deixe em branco): ").strip() or None
+        if start_date:
+            criteria['start_date'] = start_date
+
+        end_date = input("Data final YYYY-MM-DD (ou deixe em branco): ").strip() or None
+        if end_date:
+            criteria['end_date'] = end_date
+
+        # Validar
+        errors = utils.validate_search_criteria(criteria)
+        if errors:
+            print("\n❌ Critérios inválidos:")
+            for err in errors:
+                print(f"  • {err}")
+            input("Pressione ENTER para continuar...")
+            return
+
+        if not criteria:
+            print("⚠️  Nenhum critério definido. O scan usará todos os arquivos do diretório.")
+
+        # Executar scan customizado
+        self.threats = self.scanner.scan_with_advanced_search(criteria, directory, recursive)
+        if self.threats:
+            self.scanner.generate_report('custom_scan_report.json')
+
+        input("\nPressione ENTER para continuar...")
+
     def run(self):
         """Executa a aplicação"""
         self.show_banner()
@@ -280,6 +525,14 @@ class RansomwareScannerCLI:
                 print("\n👋 Encerrando...")
                 self.logger.info("Aplicação encerrada")
                 break
+            elif choice == '9':
+                self.advanced_file_search()
+            elif choice == '10':
+                self.list_directories_menu()
+            elif choice == '11':
+                self.list_packages_menu()
+            elif choice == '12':
+                self.custom_scan()
             else:
                 print("❌ Opção inválida!")
 

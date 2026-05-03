@@ -278,5 +278,195 @@ def get_user_confirmation(prompt: str = "Deseja continuar?") -> bool:
         else:
             print("Digite 's' para Sim ou 'n' para Não")
 
+def validate_directory(directory: str) -> bool:
+    """Alias de is_valid_directory para compatibilidade com main.py."""
+    return is_valid_directory(directory)
+
+def format_size(bytes_size: int) -> str:
+    """Alias de format_bytes para compatibilidade com main.py."""
+    return format_bytes(bytes_size)
+
+def generate_report_summary(threats: list) -> dict:
+    """Gera resumo estatístico de ameaças detectadas."""
+    total = len(threats)
+    by_risk = {'critical': 0, 'high': 0, 'medium': 0, 'low': 0}
+    by_type: dict = {}
+    total_size = 0
+    total_score = 0.0
+
+    for threat in threats:
+        score = threat.get('risk_score', 0)
+        total_score += score
+        total_size += threat.get('size', 0)
+
+        if score > 0.75:
+            by_risk['critical'] += 1
+        elif score > 0.45:
+            by_risk['high'] += 1
+        elif score > 0.25:
+            by_risk['medium'] += 1
+        else:
+            by_risk['low'] += 1
+
+        threat_type = threat.get('threat_type', 'unknown')
+        by_type[threat_type] = by_type.get(threat_type, 0) + 1
+
+    return {
+        'total': total,
+        'by_risk': by_risk,
+        'by_type': by_type,
+        'total_size': total_size,
+        'average_risk': total_score / total if total else 0.0,
+    }
+
+# ============================================================================
+# FUNÇÕES AUXILIARES DE BUSCA
+# ============================================================================
+
+def expand_search_paths(paths: list) -> list:
+    """
+    Expande caminhos com wildcards usando pathlib/glob.
+
+    Args:
+        paths: Lista de strings de caminhos, podendo conter wildcards.
+
+    Returns:
+        Lista de caminhos expandidos como strings.
+    """
+    expanded = []
+    for p in paths:
+        path = Path(p)
+        if any(c in str(p) for c in ('*', '?', '[')):
+            parent = path.parent
+            pattern = path.name
+            try:
+                expanded.extend(str(x) for x in parent.glob(pattern))
+            except Exception as exc:
+                logger.warning(f"Erro ao expandir caminho '{p}': {exc}")
+        else:
+            expanded.append(str(p))
+    return expanded
+
+
+def is_package_file(filepath: str) -> bool:
+    """
+    Detecta se um arquivo é um pacote compactado suportado.
+
+    Args:
+        filepath: Caminho do arquivo.
+
+    Returns:
+        True se for pacote suportado (.zip, .tar, .tar.gz, .tgz, etc.).
+    """
+    import zipfile as _zf
+    import tarfile as _tf
+    p = Path(filepath)
+    suffixes = ''.join(p.suffixes).lower()
+    package_suffixes = {'.zip', '.tar', '.gz', '.bz2', '.xz', '.tgz'}
+    if p.suffix.lower() in package_suffixes:
+        return True
+    if any(suffixes.endswith(s) for s in ('.tar.gz', '.tar.bz2', '.tar.xz')):
+        return True
+    # Verificar magic bytes
+    try:
+        if _zf.is_zipfile(filepath):
+            return True
+        if _tf.is_tarfile(filepath):
+            return True
+    except Exception:
+        pass
+    return False
+
+
+def get_package_contents(filepath: str) -> list:
+    """
+    Lista o conteúdo de um arquivo compactado sem extraí-lo.
+
+    Args:
+        filepath: Caminho do arquivo de pacote.
+
+    Returns:
+        Lista de dicts com 'name' e 'size' de cada entrada, ou lista vazia.
+    """
+    import zipfile as _zf
+    import tarfile as _tf
+
+    contents = []
+    try:
+        if _zf.is_zipfile(filepath):
+            with _zf.ZipFile(filepath, 'r') as zf:
+                for info in zf.infolist():
+                    contents.append({'name': info.filename, 'size': info.file_size})
+            return contents
+    except Exception as exc:
+        logger.debug(f"Erro ao listar zip {filepath}: {exc}")
+
+    try:
+        if _tf.is_tarfile(filepath):
+            with _tf.open(filepath, 'r:*') as tf:
+                for member in tf.getmembers():
+                    contents.append({'name': member.name, 'size': member.size})
+            return contents
+    except Exception as exc:
+        logger.debug(f"Erro ao listar tar {filepath}: {exc}")
+
+    return contents
+
+
+def normalize_path(filepath: str) -> str:
+    """
+    Normaliza um caminho para formato portável usando pathlib.
+
+    Args:
+        filepath: Caminho a ser normalizado.
+
+    Returns:
+        Caminho normalizado como string absoluta.
+    """
+    return str(Path(filepath).resolve())
+
+
+def validate_search_criteria(criteria: dict) -> list:
+    """
+    Valida critérios de busca avançada.
+
+    Args:
+        criteria: Dicionário de critérios (pattern, extensions, min_size, etc.).
+
+    Returns:
+        Lista de strings de erros de validação (vazia se tudo ok).
+    """
+    errors = []
+
+    if 'min_size' in criteria and criteria['min_size'] is not None:
+        if not isinstance(criteria['min_size'], (int, float)) or criteria['min_size'] < 0:
+            errors.append("'min_size' deve ser um número >= 0")
+
+    if 'max_size' in criteria and criteria['max_size'] is not None:
+        if not isinstance(criteria['max_size'], (int, float)) or criteria['max_size'] < 0:
+            errors.append("'max_size' deve ser um número >= 0")
+
+    if (
+        criteria.get('min_size') is not None
+        and criteria.get('max_size') is not None
+        and criteria['min_size'] > criteria['max_size']
+    ):
+        errors.append("'min_size' não pode ser maior que 'max_size'")
+
+    for date_key in ('start_date', 'end_date'):
+        val = criteria.get(date_key)
+        if val is not None:
+            try:
+                datetime.strptime(val, '%Y-%m-%d')
+            except ValueError:
+                errors.append(f"'{date_key}' deve estar no formato YYYY-MM-DD, recebido: '{val}'")
+
+    if 'extensions' in criteria and criteria['extensions'] is not None:
+        if not isinstance(criteria['extensions'], list):
+            errors.append("'extensions' deve ser uma lista de strings")
+
+    return errors
+
+
 if __name__ == "__main__":
     print("✅ Utils loaded successfully!")

@@ -185,6 +185,20 @@ RISK_SCORE_WEIGHTS = {
 assert sum(RISK_SCORE_WEIGHTS.values()) == 1.0, "Risk score weights must sum to 1.0"
 
 # ============================================================================
+# CONFIGURAÇÕES DE BUSCA AVANÇADA
+# ============================================================================
+
+SEARCH_CONFIG = {
+    'max_file_size': 100 * 1024 * 1024,          # 100 MB
+    'default_extensions': ['.exe', '.dll', '.zip', '.tar', '.rar'],
+    'exclude_directories': ['.git', 'node_modules', '__pycache__', '.venv'],
+    'exclude_patterns': ['*.log', '.DS_Store'],
+    'supported_packages': ['.zip', '.tar', '.tar.gz', '.tgz', '.tar.bz2', '.tar.xz'],
+    'threading_enabled': True,
+    'max_threads': 4,
+}
+
+# ============================================================================
 # VALIDAÇÕES
 # ============================================================================
 
