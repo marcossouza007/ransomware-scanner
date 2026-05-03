@@ -278,5 +278,63 @@ def get_user_confirmation(prompt: str = "Deseja continuar?") -> bool:
         else:
             print("Digite 's' para Sim ou 'n' para Não")
 
+# ============================================================================
+# ALIASES E FUNÇÕES ADICIONAIS
+# ============================================================================
+
+def validate_directory(directory: str) -> bool:
+    """Alias de is_valid_directory para compatibilidade com main.py"""
+    return is_valid_directory(directory)
+
+
+def format_size(bytes_size: int) -> str:
+    """Alias de format_bytes para compatibilidade com main.py"""
+    return format_bytes(bytes_size)
+
+
+def generate_report_summary(threats: list) -> dict:
+    """
+    Gera resumo estatístico a partir de lista de ameaças.
+
+    Args:
+        threats: Lista de dicionários de ameaças detectadas pelo scanner
+
+    Returns:
+        Dicionário com contagens por risco, tipo, tamanho total e risco médio.
+    """
+    by_risk = {'critical': 0, 'high': 0, 'medium': 0, 'low': 0}
+    by_type: dict = {}
+    total_size = 0
+    total_risk = 0.0
+
+    for threat in threats:
+        score = threat.get('risk_score', 0)
+
+        if score > 0.75:
+            by_risk['critical'] += 1
+        elif score > 0.45:
+            by_risk['high'] += 1
+        elif score > 0.25:
+            by_risk['medium'] += 1
+        else:
+            by_risk['low'] += 1
+
+        threat_type = threat.get('threat_type', 'unknown')
+        by_type[threat_type] = by_type.get(threat_type, 0) + 1
+
+        total_size += threat.get('size', 0)
+        total_risk += score
+
+    average_risk = total_risk / len(threats) if threats else 0.0
+
+    return {
+        'total': len(threats),
+        'by_risk': by_risk,
+        'by_type': by_type,
+        'total_size': total_size,
+        'average_risk': average_risk,
+    }
+
+
 if __name__ == "__main__":
     print("✅ Utils loaded successfully!")

@@ -12,6 +12,10 @@ from scanner import RansomwareScanner
 from quarantine import QuarantineManager, SecureDeleter
 from decryptor import RansomwareDecryptor
 from pdf_report import PDFReportGenerator
+from virustotal_checker import check_file_virustotal, check_hash_virustotal
+from cve_checker import search_cves, search_cves_by_ransomware
+from advanced_file_search import advanced_search, find_by_extension
+from virus_detector import get_detector as get_virus_detector
 
 logger = utils.setup_logger('main')
 
@@ -51,7 +55,11 @@ class RansomwareScannerCLI:
         print("5. 📄 Gerar Relatórios PDF")
         print("6. 📊 Ver Estatísticas")
         print("7. ⚙️  Configurações")
-        print("8. ✖️  Sair")
+        print("8. 🔎 Busca Avançada de Arquivos")
+        print("9. 🌐 Verificar Hash no VirusTotal")
+        print("10. 📊 Buscar CVEs Relacionadas")
+        print("11. 🦠 Detecção de Vírus Básica")
+        print("12. ✖️  Sair")
         print("\n" + "-"*80)
 
     def scan_directory(self):
@@ -251,8 +259,310 @@ class RansomwareScannerCLI:
         print(f"Log Level: {config.LOGGING_CONFIG['log_level']}")
         print(f"\nExtensões Suspeitas: {len(config.SUSPICIOUS_EXTENSIONS)}")
         print(f"Palavras-chave de Ameaça: {len(config.THREAT_DATABASE)}")
+        print(f"\n🌐 VirusTotal API Key: {'✅ Configurada' if config.VIRUSTOTAL_CONFIG.get('api_key') else '❌ Não configurada'}")
         
         input("\nPressione ENTER para continuar...")
+
+    # -----------------------------------------------------------------------
+    # OPÇÃO 8 – BUSCA AVANÇADA DE ARQUIVOS
+    # -----------------------------------------------------------------------
+
+    def advanced_file_search(self):
+        """Opção 8: Busca Avançada de Arquivos"""
+        print("\n🔎 BUSCA AVANÇADA DE ARQUIVOS\n")
+        print("Exemplos de padrões: *.exe  *.encrypted  ransom*  **/malware*")
+        print()
+
+        pattern = input("Padrão de busca (ex: *.exe): ").strip()
+        if not pattern:
+            print("❌ Padrão não pode ser vazio")
+            input("Pressione ENTER para continuar...")
+            return
+
+        directories_input = input(
+            "Diretório(s) para buscar (separados por vírgula, padrão: ./): "
+        ).strip() or "./"
+        directories = [d.strip() for d in directories_input.split(',') if d.strip()]
+
+        recursive = input("Busca recursiva? (s/n, padrão: s): ").lower() != 'n'
+
+        # Filtros opcionais
+        print("\n[Filtros opcionais – pressione ENTER para ignorar]")
+        min_size_str = input("Tamanho mínimo em bytes: ").strip()
+        max_size_str = input("Tamanho máximo em bytes: ").strip()
+        start_date_str = input("Data início modificação (YYYY-MM-DD): ").strip()
+        end_date_str = input("Data fim modificação (YYYY-MM-DD): ").strip()
+
+        min_size = int(min_size_str) if min_size_str.isdigit() else None
+        max_size = int(max_size_str) if max_size_str.isdigit() else None
+
+        print(f"\n🔎 Buscando '{pattern}' em: {', '.join(directories)}...")
+
+        results = advanced_search(
+            query=pattern,
+            directories=directories,
+            recursive=recursive,
+            min_size=min_size,
+            max_size=max_size,
+            start_date=start_date_str or None,
+            end_date=end_date_str or None,
+        )
+
+        print(f"\n✅ Encontrados: {len(results)} arquivo(s)\n")
+
+        for idx, entry in enumerate(results[:50], 1):
+            size_str = utils.format_size(entry['size'])
+            print(f"{idx:3}. {entry['path']}")
+            print(f"      └─ {size_str}  |  Modificado: {entry['modified'][:10]}")
+
+        if len(results) > 50:
+            print(f"\n... e mais {len(results) - 50} arquivo(s) não exibidos.")
+
+        if results:
+            add_to_scan = input(
+                "\nDeseja adicionar esses arquivos como ameaças suspeitas? (s/n): "
+            ).lower()
+            if add_to_scan == 's':
+                for entry in results:
+                    if not any(t['path'] == entry['path'] for t in self.threats):
+                        self.threats.append({
+                            'path': entry['path'],
+                            'risk_score': 0.0,
+                            'size': entry['size'],
+                            'timestamp': datetime.now().isoformat(),
+                            'file_hash': utils.calculate_sha256(entry['path']) or 'N/A',
+                            'threat_type': 'search_result',
+                            'extension': entry['extension'],
+                        })
+                print(f"✅ {len(results)} arquivo(s) adicionados como suspeitos")
+
+        input("\nPressione ENTER para continuar...")
+
+    # -----------------------------------------------------------------------
+    # OPÇÃO 9 – VIRUSTOTAL LOOKUP
+    # -----------------------------------------------------------------------
+
+    def virustotal_lookup(self):
+        """Opção 9: Verificar Hash no VirusTotal"""
+        print("\n🌐 VERIFICAR HASH NO VIRUSTOTAL\n")
+
+        if not config.VIRUSTOTAL_CONFIG.get('api_key'):
+            print("⚠️  API key do VirusTotal não configurada.")
+            print("   Configure a variável de ambiente VIRUSTOTAL_API_KEY ou")
+            print("   edite VIRUSTOTAL_CONFIG['api_key'] em config.py")
+            print()
+
+        print("1. Verificar por hash SHA256")
+        print("2. Verificar arquivo (calcula hash automaticamente)")
+        print("3. Verificar ameaças detectadas no último scan")
+        print()
+
+        choice = input("Escolha (1/2/3): ").strip()
+
+        if choice == '1':
+            sha256 = input("\nDigite o hash SHA256: ").strip()
+            if len(sha256) != 64:
+                print("❌ Hash SHA256 inválido (deve ter 64 caracteres)")
+                input("Pressione ENTER para continuar...")
+                return
+            print(f"\n🔄 Consultando VirusTotal para hash {sha256[:16]}...")
+            result = check_hash_virustotal(sha256)
+            self._display_virustotal_result(result, sha256[:16] + '...')
+
+        elif choice == '2':
+            filepath = input("\nDigite o caminho do arquivo: ").strip()
+            if not utils.is_valid_file(filepath):
+                print(f"❌ Arquivo inválido: {filepath}")
+                input("Pressione ENTER para continuar...")
+                return
+            print(f"\n🔄 Consultando VirusTotal para: {filepath}")
+            result = check_file_virustotal(filepath)
+            self._display_virustotal_result(result, filepath)
+
+        elif choice == '3':
+            if not self.threats:
+                print("❌ Nenhuma ameaça detectada. Execute um scan primeiro.")
+                input("Pressione ENTER para continuar...")
+                return
+            print(f"\n🔄 Verificando {len(self.threats)} ameaça(s)...\n")
+            for threat in self.threats[:10]:
+                sha256 = threat.get('file_hash', '')
+                if sha256:
+                    result = check_hash_virustotal(sha256)
+                    print(f"\n📄 {threat['path'][:60]}")
+                    self._display_virustotal_result(result, sha256[:16] + '...')
+        else:
+            print("❌ Opção inválida")
+
+        input("\nPressione ENTER para continuar...")
+
+    def _display_virustotal_result(self, result: dict, label: str):
+        """Exibe resultado do VirusTotal de forma formatada"""
+        if result.get('offline'):
+            print(f"   ⚠️  {result.get('message', 'Modo offline')}")
+            return
+
+        detected = result.get('detected', False)
+        score = result.get('score', 0)
+        engines_det = result.get('engines_detected', 0)
+        engines_tot = result.get('engines_total', 0)
+        names = result.get('malware_names', [])
+        cached = result.get('from_cache', False)
+
+        icon = '🔴' if detected else '🟢'
+        cache_tag = ' [cache]' if cached else ''
+
+        print(f"   {icon} {label}{cache_tag}")
+        print(f"   ├─ Detectado: {'SIM' if detected else 'NÃO'}")
+        print(f"   ├─ Score: {score}/100  ({engines_det}/{engines_tot} engines)")
+        if names:
+            print(f"   └─ Nomes: {', '.join(names[:5])}")
+        if result.get('permalink'):
+            print(f"   └─ Link: {result['permalink']}")
+
+    # -----------------------------------------------------------------------
+    # OPÇÃO 10 – BUSCAR CVEs
+    # -----------------------------------------------------------------------
+
+    def search_cves_menu(self):
+        """Opção 10: Buscar CVEs Relacionadas"""
+        print("\n📊 BUSCAR CVEs RELACIONADAS\n")
+        print("Busca no NVD (National Vulnerability Database) por CVEs")
+        print("relacionadas a ransomware, extensões de arquivo ou malware.")
+        print()
+
+        keyword = input("Termo de busca (ex: wannacry, .encrypted, lockbit): ").strip()
+        if not keyword:
+            print("❌ Termo não pode ser vazio")
+            input("Pressione ENTER para continuar...")
+            return
+
+        severity_options = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', '']
+        print("\nFiltro de severidade mínima:")
+        print("1. CRITICAL  2. HIGH  3. MEDIUM  4. LOW  5. Todos")
+        sev_choice = input("Escolha (1-5, padrão: 5): ").strip()
+        severity_map = {'1': 'CRITICAL', '2': 'HIGH', '3': 'MEDIUM', '4': 'LOW', '5': None}
+        severity = severity_map.get(sev_choice)
+
+        print(f"\n🔄 Buscando CVEs para '{keyword}'...")
+        result = search_cves(keyword, severity_filter=severity)
+
+        if result.get('offline'):
+            print(f"⚠️  {result.get('message', 'Sem conexão com NVD')}")
+            input("\nPressione ENTER para continuar...")
+            return
+
+        cves = result.get('cves', [])
+        print(f"\n✅ Encontradas: {result.get('total_found', 0)} CVE(s)")
+        print(f"   Score CVSS máximo: {result.get('cvss_score', 0):.1f}")
+        print(f"   Severidade: {result.get('severity', 'N/A')}")
+        if result.get('from_cache'):
+            print("   [resultado do cache]")
+
+        print()
+        for idx, cve in enumerate(cves[:10], 1):
+            severity_icon = {
+                'CRITICAL': '🔴', 'HIGH': '🟠', 'MEDIUM': '🟡',
+                'LOW': '🟢', 'NONE': '⚪'
+            }.get(cve.get('severity', 'NONE'), '⚪')
+            print(f"{idx:2}. {severity_icon} {cve['id']}  (CVSS {cve['cvss_score']:.1f})")
+            print(f"    {cve['description'][:120]}")
+            print()
+
+        if len(cves) > 10:
+            print(f"... e mais {len(cves) - 10} CVE(s) não exibidas.")
+
+        recs = result.get('recommendations', [])
+        if recs:
+            print("\n💡 Recomendações:")
+            for rec in recs:
+                print(f"  • {rec}")
+
+        input("\nPressione ENTER para continuar...")
+
+    # -----------------------------------------------------------------------
+    # OPÇÃO 11 – DETECÇÃO DE VÍRUS BÁSICA
+    # -----------------------------------------------------------------------
+
+    def virus_detection_menu(self):
+        """Opção 11: Detecção de Vírus Básica"""
+        print("\n🦠 DETECÇÃO DE VÍRUS BÁSICA\n")
+        print("1. Analisar arquivo específico")
+        print("2. Analisar ameaças do último scan")
+        print("3. Analisar diretório")
+        print()
+
+        choice = input("Escolha (1/2/3): ").strip()
+        detector = get_virus_detector()
+
+        if choice == '1':
+            filepath = input("\nDigite o caminho do arquivo: ").strip()
+            if not utils.is_valid_file(filepath):
+                print(f"❌ Arquivo inválido: {filepath}")
+                input("Pressione ENTER para continuar...")
+                return
+            print(f"\n🔄 Analisando: {filepath}")
+            prob = detector.detect_virus_probability(filepath)
+            names = detector.get_virus_names()
+            self._display_virus_result(filepath, prob, names)
+
+        elif choice == '2':
+            if not self.threats:
+                print("❌ Nenhuma ameaça detectada. Execute um scan primeiro.")
+                input("Pressione ENTER para continuar...")
+                return
+            print(f"\n🔄 Analisando {len(self.threats)} ameaça(s)...\n")
+            for threat in self.threats:
+                filepath = threat['path']
+                if not utils.is_valid_file(filepath):
+                    continue
+                prob = detector.detect_virus_probability(filepath)
+                names = detector.get_virus_names()
+                self._display_virus_result(filepath, prob, names)
+
+        elif choice == '3':
+            directory = input("\nDigite o caminho do diretório: ").strip() or "./"
+            if not utils.validate_directory(directory):
+                print(f"❌ Diretório inválido: {directory}")
+                input("Pressione ENTER para continuar...")
+                return
+            from pathlib import Path as _Path
+            files = list(_Path(directory).rglob('*'))
+            files = [f for f in files if f.is_file()]
+            print(f"\n🔄 Analisando {len(files)} arquivo(s)...\n")
+            suspicious = []
+            for fpath in files[:200]:  # Limitar a 200 arquivos
+                prob = detector.detect_virus_probability(str(fpath))
+                if prob > 0.3:
+                    names = detector.get_virus_names()
+                    suspicious.append((str(fpath), prob, names))
+
+            print(f"\n🦠 Arquivos suspeitos: {len(suspicious)}")
+            for fp, prob, names in suspicious:
+                self._display_virus_result(fp, prob, names)
+        else:
+            print("❌ Opção inválida")
+
+        input("\nPressione ENTER para continuar...")
+
+    def _display_virus_result(self, filepath: str, probability: float, names: list):
+        """Exibe resultado da detecção de vírus"""
+        if probability > 0.75:
+            icon = "🔴 CRÍTICO"
+        elif probability > 0.45:
+            icon = "🟠 ALTO"
+        elif probability > 0.25:
+            icon = "🟡 MÉDIO"
+        elif probability > 0:
+            icon = "🟢 BAIXO"
+        else:
+            icon = "✅ LIMPO"
+
+        print(f"  📄 {filepath[:70]}")
+        print(f"     ├─ Probabilidade: {probability:.1%} ({icon})")
+        if names:
+            print(f"     └─ Detectado: {', '.join(names[:3])}")
+        print()
 
     def run(self):
         """Executa a aplicação"""
@@ -277,6 +587,14 @@ class RansomwareScannerCLI:
             elif choice == '7':
                 self.show_settings()
             elif choice == '8':
+                self.advanced_file_search()
+            elif choice == '9':
+                self.virustotal_lookup()
+            elif choice == '10':
+                self.search_cves_menu()
+            elif choice == '11':
+                self.virus_detection_menu()
+            elif choice == '12':
                 print("\n👋 Encerrando...")
                 self.logger.info("Aplicação encerrada")
                 break

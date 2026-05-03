@@ -190,7 +190,8 @@ class RansomwareScanner:
     def scan_directory(
         self,
         directory: str,
-        recursive: bool = True
+        recursive: bool = True,
+        enable_virus_detection: bool = False,
     ) -> List[Dict]:
         """Escaneia diretório em busca de ransomware"""
         self.start_time = datetime.now()
@@ -203,6 +204,16 @@ class RansomwareScanner:
             logger.error(f"Directory not found: {directory}")
             print(f"❌ Diretório não encontrado: {directory}")
             return []
+
+        # Importar detector de vírus apenas quando solicitado
+        virus_detector = None
+        if enable_virus_detection:
+            try:
+                from virus_detector import get_detector
+                virus_detector = get_detector()
+                print("🦠 Detecção de vírus ativada")
+            except Exception as e:
+                logger.warning(f"Módulo de detecção de vírus indisponível: {e}")
         
         try:
             if recursive:
@@ -216,6 +227,23 @@ class RansomwareScanner:
                     total_files += 1
                     try:
                         risk_score = self.calculate_risk(str(file_path))
+
+                        # Incorporar score de detecção de vírus, se ativado
+                        virus_probability = 0.0
+                        virus_names: list = []
+                        if virus_detector:
+                            try:
+                                virus_probability = virus_detector.detect_virus_probability(
+                                    str(file_path)
+                                )
+                                virus_names = virus_detector.get_virus_names()
+                                # Elevar risk_score se detector de vírus identificar ameaça
+                                if virus_probability > 0:
+                                    risk_score = min(
+                                        risk_score + virus_probability * 0.3, 1.0
+                                    )
+                            except Exception as e:
+                                logger.debug(f"Erro na detecção de vírus para {file_path}: {e}")
                         
                         if risk_score > self.threat_threshold:
                             threat_info = {
@@ -226,10 +254,14 @@ class RansomwareScanner:
                                 'file_hash': calculate_sha256(str(file_path)),
                                 'threat_type': classify_threat_type(str(file_path), 0),
                                 'extension': get_file_extension(str(file_path)),
+                                'virus_probability': virus_probability,
+                                'virus_names': virus_names,
                             }
                             self.infected_files.append(threat_info)
                             print(f"⚠️  [ENCONTRADO] {file_path}")
                             print(f"   └─ Risk Score: {risk_score:.2%}")
+                            if virus_names:
+                                print(f"   └─ Vírus: {', '.join(virus_names[:3])}")
                     except Exception as e:
                         logger.debug(f"Error processing {file_path}: {e}")
             
